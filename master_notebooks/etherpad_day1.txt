@@ -1,0 +1,378 @@
+ Welcome to The Carpentries Etherpad!
+
+This pad is synchronized as you type, so that everyone viewing this page sees the same text. This allows you to collaborate seamlessly on documents.
+
+Use of this service is restricted to members of The Carpentries community; this is not for general purpose use (for that, try https://etherpad.wikimedia.org).
+
+Users are expected to follow our code of conduct: https://docs.carpentries.org/topic_folders/policies/code-of-conduct.html
+
+All content is publicly available under the Creative Commons Attribution License: https://creativecommons.org/licenses/by/4.0/
+
+ ----------------------------------------------------------------------------
+ American Astronomical Society Meeting 240
+ Workshop 
+ June 11th - 12th
+ 
+ Foundations of Astronomical Data Science
+ https://submissions.mirasmart.com/AAS240/itinerary/EventsAAG.aspx
+
+ Useful links
+ Workshop website (incl links to etherpad and schedule): https://tautme.github.io/2022-06-11-aas-dc/
+ Lessons (using Gaia Archive at ESAC): https://datacarpentry.org/astronomy-python/
+ Workshop repository: https://github.com/tautme/2022-06-11-aas-dc/
+ Master Notebooks: https://github.com/tautme/2022-06-11-aas-dc/tree/gh-pages/master_notebooks
+ 
+ Collaborative Notebook
+ https://pad.carpentries.org/2022-06-11-aas-dc
+ 
+* Wifi password
+* sheraton meeting
+* pasadena303
+
+
+*Day1: Copied code cells below
+
+url = "http://TAPVizieR.u-strasbg.fr/TAPVizieR/tap"
+
+url="http://TAPVizieR.u-strasbg.fr/TAPVizieR/tap"
+tap_session = requests.Session()
+tap_service = vo.dal.TAPService(url, session=tap_session)
+
+table_query = """
+SELECT 
+TOP 30 
+table_name 
+FROM tap_schema.tables
+"""
+
+table_result = tap_service.run_sync(table_query)
+table_table = table_result.to_table()
+table_table
+ 
+description_query = """ SELECT *  FROM tap_schema.tables  WHERE table_name='I/345/gaia2' """
+ 
+column_query = """ SELECT column_name, description, unit
+FROM tap_schema.columns 
+WHERE table_name = 'I/345/gaia2'"""
+
+column_result = tap_service.run_sync(column_query)
+
+column_table =column_result.to_table()
+column_table.show_in_notebook()
+
+
+*Exercise link to VizieR
+http://vizier.cds.unistra.fr/viz-bin/VizieR
+Go to link and chose a catalog and get the description of the catalog.
+
+Search for 'supernova sternberg' and find "II/256/sn"
+
+description_query_sternberg = """SELECT * 
+FROM tap_schema.tables 
+WHERE table_name='II/256/sn'"""
+
+print(description_query_sternberg)
+
+result_sternberg= tap_service.run_sync(description_query_sternberg)
+
+table_sternberg = result_sternberg.to_table()
+
+table_sternberg
+
+*End of Exercise
+
+*Asynchronous Queries
+
+query2 = """SELECT
+TOP 3000
+source_id, ra, dec, pmra, pmdec, parallax
+FROM \"I/345/gaia2\""""
+
+print(query2)
+
+job2 = tap_service.run_async(query2)
+
+results2 = job2.to_table()
+results2
+
+Troubleshooting:
+1) Whenever possible, start with a working query
+2) Make small changes and test each change before you continue
+3) While you are debugging, use TOP to limit the number of rows in the result.
+
+query2 = """SELECT
+TOP 10
+source_id, ra, dec, pmra, pmdec, parallax
+FROM \"I/345/gaia2\"
+WHERE parallax < 1"""
+
+job2 = tap_service.run_sync(query2)
+
+results2 = job2.to_table()
+results2
+
+https://www.w3schools.com/sql/sql_operators.asp
+
+query2_soln2 = """SELECT
+TOP 10
+source_id, ra, dec, pmra, pmdec, parallax
+FROM \"I/345/gaia2\"
+WHERE parallax < 1
+AND bp_rp BETWEEN -0.75 AND 2"""
+
+job2_soln2 = tap_service.run_sync(query2_soln2)
+job2_soln2
+
+columns = 'source_id, ra, dec, pmra, pmdec, parallax'
+
+query3_base = """SELECT
+TOP 10
+{columns}
+FROM \"I/345/gaia2\"
+WHERE parallax < 1
+AND bp_rp*1 BETWEEN -0.75 AND 2"""
+
+query3 = query3_base.format(columns=columns)
+
+print(query3)
+
+*2. Coordinate transformation
+
+
+https://docs.astropy.org/en/stable/units/
+
+import astropy.units as u
+dir(u)
+angle = 10*u.degree
+type(angle)
+angle
+angle_arcmin = angle.to(u.arcmin)
+angle_arcmin
+angle + 30*u.arcmin
+30*u.arcmin+angle
+angle + 5*u.kg
+
+
+cone_query = """SELECT
+TOP 10
+source_id
+FROM \"I/345/gaia2\"
+WHERE 1=CONTAINS(
+    POINT('ICRS', ra,dec),
+    CIRCLE('ICRS', 88.8, 7.4, 0.083))
+"""
+
+import astropy.units as u
+
+cone_query = """SELECT
+TOP 10
+source_id
+FROM \"I/345/gaia2\"
+WHERE 1=CONTAINS(
+    POINT('ICRS', ra,dec),
+    CIRCLE('ICRS', 88.8, 7.4, 0.083))
+"""
+
+cone_job = tap_service.run_sync(cone_query, language='ADQL')
+cone_job.infos
+cone_results = cone_job.to_table()
+
+Exercise:
+count_cone_query = """SELECT 
+COUNT(source_id)
+FROM \"I/345/gaia2\"
+WHERE 1=CONTAINS(
+  POINT('ICRS', ra, dec),
+  CIRCLE('ICRS', 88.8, 7.4, 0.08333333))
+"""
+
+count_cone_job = tap_service.run_sync(count_cone_query)
+count_cone_results = count_cone_job.to_table()
+count_cone_results
+
+from astropy.coordinates import SkyCoord
+
+ra = 88.8 * u.degree
+dec = 7.4 * u.degree
+coord_icrs = SkyCoord(ra=ra, dec=dec, frame='icrs')
+
+coord_galactic = coord_icrs.transform_to('galactic')
+
+from gala.coordinates import GD1Koposov10
+
+gd1_frame = GD1Koposov10()
+gd1_frame
+
+coord_gd1 = coord_icrs.transform_to(gd1_frame)
+coord_gd1
+
+origin_gd1 = SkyCoord(0*u.degree, 0*u.degree, frame=gd1_frame)
+
+origin_gd1.transform_to('icrs')
+
+phi1_min = -55 * u.degree 
+phi1_max = -45 * u.degree
+phi2_min = -8 * u.degree
+phi2_max = 4 * u.degree
+
+def make_rectangle(x1, x2, y1, y2):
+    """Return the corners of a rectangle."""
+    xs = [x1, x1, x2, x2, x1]
+    ys = [y1, y2, y2, y1, y1]
+    return xs, ys
+    
+phi1_rect, phi2_rect = make_rectangle( phi1_min, phi1_max, phi2_min, phi2_max)
+corners = SkyCoord(phi1=phi1_rect, phi2=phi2_rect, frame=gd1_frame)
+corners_icrs = corners.transform_to('icrs')
+
+*"""
+*POLYGON('ICRS', 143.65, 20.98, 
+*        134.46, 26.39, 
+*        140.58, 34.85, 
+*        150.16, 29.01)
+*"""
+
+corners_list_str = corners_icrs.to_string()
+corners_single_str = ' '.join(corners_list_str)
+corners_single_str.replace(' ', ', ')
+
+We write these 3 lines in a function instead: 
+def skycoord_to_string(skycoord):
+    """Convert a one-dimenstional list of SkyCoord to string for Gaia's query format."""
+    corners_list_str = skycoord.to_string()
+    corners_single_str = ' '.join(corners_list_str)
+    return corners_single_str.replace(' ', ', ')
+    
+    # Now assempling the query:
+    
+    columns = 'source_id, ra, dec, pmra, pmdec, parallax'
+    
+    query3_base = """SELECT 
+TOP 10 
+{columns}
+FROM \"I/345/gaia2\"
+WHERE parallax < 1
+  AND bp_rp BETWEEN -0.75 AND 2
+"""
+
+polygon_top10query_base = """SELECT
+TOP 10
+{columns}
+FROM \"I/345/gaia2\"
+WHERE parallax < 1
+  AND bp_rp*1 BETWEEN -0.75 AND 2 
+  AND 1 = CONTAINS(POINT('ICRS', ra, dec), 
+                   POLYGON('ICRS', {sky_point_list}))
+"""
+
+polygon_top10query = polygon_top10query_base.format(columns=columns,  sky_point_list=sky_point_list)
+polygon_top10query_job = tap_service.run_sync(polygon_top10query)
+polygon_top10query_job.infos
+polygon_top10query_results = polygon_top10query_job.to_table()
+
+
+polygon_query_base = """SELECT
+{columns}
+FROM \"I/345/gaia2\"
+WHERE parallax < 1
+   AND bp_rp*1 BETWEEN -0.75 AND 2
+   AND 1 = CONTAINS(
+    POINT('ICRS', ra, dec),
+    POLYGON('ICRS', {sky_point_list})
+    )
+    
+    """
+    
+    polygon_query = polygon_query_base.format(columns = columns,
+                                            sky_point_list= sky_point_list)
+print(polygon_query)
+
+polygon_job = tap_service.run_async(polygon_query)
+polygon_results = polygon_job.to_table().
+filename = 'gd1_results.fits'
+polygon_results.write(filename, overwrite=True)
+
+Plotting:
+import matplotlib.pyplot as plt
+%matplotlib inline
+
+x = polygon_results['ra']
+y = polygon_results['dec']
+plt.plot(x, y, 'ko')
+plt.xlabel('ra (degree ICRS)')
+plt.ylabel('dec (degree ICRS)')
+
+distance = 8 * u.kpc
+radial_velocity= 0 * u.km/u.s
+
+skycoord = SkyCoord(ra=polygon_results['ra'], 
+                    dec=polygon_results['dec'],
+                    pm_ra_cosdec=polygon_results['pmra'],
+                    pm_dec=polygon_results['pmdec'], 
+                    distance=distance, 
+                    radial_velocity=radial_velocity)
+                    
+                    transformed = skycoord.transform_to(gd1_frame)
+                    
+                    from gala.coordinates import reflex_correct
+                    skycoord_gd1 = reflex_correct(transformed)
+                    
+ x = skycoord_gd1.phi1
+y = skycoord_gd1.phi2
+plt.plot(x, y, 'ko', markersize=0.1, alpha=0.1)
+
+plt.xlabel('phi1 (degree GD1)')
+plt.ylabel('phi2 (degree GD1)')
+
+PANDAS:
+polygon_results['pm_phi1'] = skycoord_gd1.pm_phi1_cosphi2
+polygon_results['pm_phi2'] = skycoord_gd1.pm_phi2
+polygon_results['phi1'] = skycoord_gd1.phi1
+polygon_results['phi2'] = skycoord_gd1.phi2
+
+import pandas as pd
+results_df = polygon_results.to_pandas()
+
+	def make_dataframe(table):
+	    """Transform coordinates from ICRS to GD-1 frame.
+	    
+	    table: Astropy Table
+	    
+	    returns: Pandas DataFrame
+	    """
+	    #Create a SkyCoord object with the coordinates and proper motions
+	    # in the input table
+	    skycoord = SkyCoord(
+	               ra=table['ra'], 
+	               dec=table['dec'],
+	               pm_ra_cosdec=table['pmra'],
+	               pm_dec=table['pmdec'], 
+	               distance=8*u.kpc, 
+	               radial_velocity=0*u.km/u.s)
+	
+	    # Define the GD-1 reference frame
+	    gd1_frame = GD1Koposov10()
+	
+	    # Transform input coordinates to the GD-1 reference frame
+	    transformed = skycoord.transform_to(gd1_frame)
+	
+	    # Correct GD-1 coordinates for solar system motion around galactic center
+	    skycoord_gd1 = reflex_correct(transformed)
+	
+	    #Add GD-1 reference frame columns for coordinates and proper motions
+	    table['phi1'] = skycoord_gd1.phi1
+	    table['phi2'] = skycoord_gd1.phi2
+	    table['pm_phi1'] = skycoord_gd1.pm_phi1_cosphi2
+	    table['pm_phi2'] = skycoord_gd1.pm_phi2
+	
+	    # Create DataFrame
+	    df = table.to_pandas()
+
+    return df
+    
+    results_df = make_dataframe(polygon_results)
+    
+    from astropy.table import Table
+    results_table = Table.from_pandas(results_df)
+    
+    results_df.describe()
